@@ -30,7 +30,7 @@ class _SmsNotificationsPageState extends State<SmsNotificationsPage> {
 
   Future<void> _sendSmsNotification(String phoneNumber, String message) async {
     const String twilioSID = 'AC64bea50a1823cc80444d6cfa91566b3f';
-    const String twilioAuthToken = '68d8268e781e0a857a6931162da7ab7b';
+    const String twilioAuthToken = '57606219f8ec047103aff111a0c6a57d';
     const String twilioPhoneNumber = '+14452921344';
 
     if (phoneNumber.isEmpty) return;
@@ -60,11 +60,16 @@ class _SmsNotificationsPageState extends State<SmsNotificationsPage> {
         },
       );
 
+      print('Response status: ${response.statusCode}');
+      print('Response body: ${response.body}');
+
       if (response.statusCode == 200 || response.statusCode == 201) {
         print('SMS sent successfully');
       } else {
         final errorData = json.decode(response.body);
         print('Failed to send SMS: ${errorData['message']}');
+        // Log more details about the error
+        print('Error details: $errorData');
       }
     } catch (e) {
       print('Error sending SMS: $e');

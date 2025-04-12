@@ -4,7 +4,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 import 'admin_screen.dart';
-
 import 'due_date_fine.dart';
 import 'sms_notifications.dart';
 import 'reports_logs.dart';
@@ -32,7 +31,14 @@ class _MemberManagementPageState extends State<MemberManagementPage> {
   String? _editingId;
 
   Future<void> _saveStudent() async {
-    if (_formKey.currentState!.validate() && _issueDate != null) {
+    if (_formKey.currentState!.validate()) {
+      if (_issueDate == null) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Please select an issue date")));
+        return;
+      }
+
       await FirebaseFirestore.instance
           .collection('students')
           .doc(_editingId ?? _idController.text)
@@ -45,6 +51,7 @@ class _MemberManagementPageState extends State<MemberManagementPage> {
             'phno': _phnoController.text,
             'issueDate': _issueDate!.toIso8601String(),
           });
+
       _clearForm();
     }
   }
@@ -144,18 +151,17 @@ class _MemberManagementPageState extends State<MemberManagementPage> {
           ),
         ),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            // Form
             Card(
               elevation: 5,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(15),
               ),
               child: Padding(
-                padding: const EdgeInsets.all(16.0),
+                padding: const EdgeInsets.all(16),
                 child: Form(
                   key: _formKey,
                   child: Column(
@@ -165,32 +171,62 @@ class _MemberManagementPageState extends State<MemberManagementPage> {
                         decoration: const InputDecoration(
                           labelText: 'Student Name',
                         ),
+                        validator:
+                            (value) =>
+                                value == null || value.trim().isEmpty
+                                    ? 'Required'
+                                    : null,
                       ),
                       TextFormField(
                         controller: _emailController,
                         decoration: const InputDecoration(
                           labelText: 'Email ID',
                         ),
+                        validator:
+                            (value) =>
+                                value == null || value.trim().isEmpty
+                                    ? 'Required'
+                                    : null,
                       ),
                       TextFormField(
                         controller: _classController,
                         decoration: const InputDecoration(labelText: 'Class'),
+                        validator:
+                            (value) =>
+                                value == null || value.trim().isEmpty
+                                    ? 'Required'
+                                    : null,
                       ),
                       TextFormField(
                         controller: _idController,
                         decoration: const InputDecoration(labelText: 'ID'),
+                        validator:
+                            (value) =>
+                                value == null || value.trim().isEmpty
+                                    ? 'Required'
+                                    : null,
                       ),
                       TextFormField(
                         controller: _phnoController,
                         decoration: const InputDecoration(
                           labelText: 'Phone Number',
                         ),
+                        validator:
+                            (value) =>
+                                value == null || value.trim().isEmpty
+                                    ? 'Required'
+                                    : null,
                       ),
                       TextFormField(
                         controller: _bookController,
                         decoration: const InputDecoration(
                           labelText: 'Book Name',
                         ),
+                        validator:
+                            (value) =>
+                                value == null || value.trim().isEmpty
+                                    ? 'Required'
+                                    : null,
                       ),
                       const SizedBox(height: 10),
                       Row(
@@ -225,7 +261,7 @@ class _MemberManagementPageState extends State<MemberManagementPage> {
                 ),
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 20),
             // Search and Filter
             Row(
               children: [
@@ -255,9 +291,10 @@ class _MemberManagementPageState extends State<MemberManagementPage> {
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 20),
             // Student List
-            Expanded(
+            SizedBox(
+              height: 400, // You can adjust this height
               child: StreamBuilder(
                 stream:
                     FirebaseFirestore.instance
@@ -274,7 +311,6 @@ class _MemberManagementPageState extends State<MemberManagementPage> {
                             student['class'].toLowerCase().contains(query) ||
                             student['book'].toLowerCase().contains(query) ||
                             student['phno'].toLowerCase().contains(query);
-                        ;
                       }).toList();
 
                   return ListView.builder(

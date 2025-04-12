@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'admin_screen.dart';
 import 'issue_return_books.dart';
 import 'sms_notifications.dart';
@@ -40,11 +42,81 @@ class ReportsLogsPage extends StatelessWidget {
         return;
     }
 
-    // Close the drawer before navigation
     Navigator.pop(context);
-
-    // Navigate to the selected page
     Navigator.push(context, MaterialPageRoute(builder: (context) => page));
+  }
+
+  // Generic count stream from Firestore
+  Stream<int> _getCount(
+    String collection, {
+    String? field,
+    dynamic value,
+    bool isNotEqual = false,
+  }) {
+    return FirebaseFirestore.instance.collection(collection).snapshots().map((
+      snapshot,
+    ) {
+      if (field == null) return snapshot.docs.length;
+
+      return snapshot.docs.where((doc) {
+        var data = doc.data();
+        if (!data.containsKey(field)) return false;
+        return isNotEqual ? data[field] != value : data[field] == value;
+      }).length;
+    });
+  }
+
+  // Card widget for displaying a stat
+  Widget _buildReportCard(String title, Stream<int> countStream, Color color) {
+    return StreamBuilder<int>(
+      stream: countStream,
+      builder: (context, snapshot) {
+        final count = snapshot.data ?? 0;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [color.withOpacity(0.9), color.withOpacity(0.7)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: color.withOpacity(0.4),
+                offset: const Offset(0, 8),
+                blurRadius: 12,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.all(20),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Flexible(
+                child: Text(
+                  title,
+                  style: GoogleFonts.poppins(
+                    fontSize: 22,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Text(
+                "$count",
+                style: GoogleFonts.poppins(
+                  fontSize: 55,
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -54,8 +126,28 @@ class ReportsLogsPage extends StatelessWidget {
         onFeatureTap: (feature) => _handleFeatureTap(context, feature),
       ),
       appBar: AppBar(
-        title: const Text("Reports & Logs"),
-        backgroundColor: Colors.blue.shade900,
+        title: Text(
+          "Reports & Logs",
+          style: GoogleFonts.lato(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Color(0xFFA3D5FF),
+                Color(0xFF83C9F4),
+                Color(0xFF6F73D2),
+                Color(0xFF242A42),
+              ],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+          ),
+        ),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -70,44 +162,41 @@ class ReportsLogsPage extends StatelessWidget {
                 color: Colors.blue.shade900,
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 20),
+
+            // Grid cards
             Expanded(
-              child: ListView(
+              child: GridView.count(
+                crossAxisCount: MediaQuery.of(context).size.width > 600 ? 2 : 1,
+                crossAxisSpacing: 20,
+                mainAxisSpacing: 20,
+                childAspectRatio: 2.8,
                 children: [
-                  _buildReportItem(
-                    "Daily Transactions Report",
-                    Icons.insert_chart,
+                  _buildReportCard(
+                    "Students Who Took Books",
+                    _getCount("issue_return"),
+                    Colors.blue,
                   ),
-                  _buildReportItem("Overdue Books Report", Icons.warning),
-                  _buildReportItem("Member Activity Logs", Icons.history),
-                  _buildReportItem(
-                    "Fine Collection Summary",
-                    Icons.attach_money,
+                  _buildReportCard(
+                    "Students Who Returned Books",
+                    _getCount("issue_return", field: "submitted", value: true),
+                    Colors.green,
                   ),
-                  _buildReportItem("System Access Logs", Icons.lock),
+                  _buildReportCard(
+                    "Students Who Have Not Returned Books",
+                    _getCount("issue_return", field: "submitted", value: false),
+                    Colors.redAccent,
+                  ),
+                  _buildReportCard(
+                    "Students With Penalties",
+                    _getCount("due_date_fine"),
+                    Colors.orange,
+                  ),
                 ],
               ),
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildReportItem(String title, IconData icon) {
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      elevation: 3,
-      child: ListTile(
-        leading: Icon(icon, color: Colors.blue.shade900, size: 30),
-        title: Text(
-          title,
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-        ),
-        trailing: Icon(Icons.arrow_forward_ios, color: Colors.grey.shade600),
-        onTap: () {
-          // TODO: Navigate to detailed reports page
-        },
       ),
     );
   }

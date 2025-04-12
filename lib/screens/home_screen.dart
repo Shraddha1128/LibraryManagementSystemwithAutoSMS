@@ -1,12 +1,75 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'signin_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+
+import 'signin_screen.dart';
+import 'borrowed_books_screen.dart';
+import 'notifications_screen.dart';
+import 'profile_screen.dart';
+import 'help_support_screen.dart';
+
+enum Feature {
+  home,
+  borrowedBooks,
+  notifications,
+  profile,
+  helpSupport,
+  logout,
+}
 
 class HomePage extends StatelessWidget {
   final String userName;
+  final String userEmail;
 
-  const HomePage({Key? key, required this.userName}) : super(key: key);
+  const HomePage({Key? key, required this.userName, required this.userEmail})
+    : super(key: key);
+
+  void handleFeature(BuildContext context, Feature feature) {
+    switch (feature) {
+      case Feature.borrowedBooks:
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => BorrowedBooksScreen(userEmail: userEmail),
+          ),
+        );
+        break;
+
+      case Feature.profile:
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ProfileScreen(userEmail: userEmail),
+          ),
+        );
+        break;
+
+      case Feature.helpSupport:
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const HelpSupportScreen()),
+        );
+        break;
+      case Feature.notifications:
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+        );
+        break;
+
+      case Feature.home:
+        Navigator.pop(context); // Just close the drawer
+        break;
+
+      case Feature.logout:
+        FirebaseAuth.instance.signOut();
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const SigninPage()),
+        );
+        break;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -14,51 +77,35 @@ class HomePage extends StatelessWidget {
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(60),
         child: AppBar(
-          title: Text(
-            "Welcome, $userName",
-            style: GoogleFonts.lato(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: Colors.white, // Solid white text color
+          title: Flexible(
+            child: Text(
+              "Welcome, $userName",
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.lato(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
             ),
           ),
           flexibleSpace: Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  // Light blue
-                  Color(0xFFA3D5FF), // Sky blue
-                  Color(0xFF83C9F4), // Medium blue
-                  Color(0xFF6F73D2), // Lavender blue
-                  Color(0xFF242A42), // Dark navy
+                  Color(0xFFA3D5FF),
+                  Color(0xFF83C9F4),
+                  Color(0xFF6F73D2),
+                  Color(0xFF242A42),
                 ],
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
               ),
             ),
           ),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.logout, color: Colors.white),
-              onPressed: () {
-                FirebaseAuth.instance.signOut();
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (context) => const SigninPage()),
-                );
-              },
-            ),
-          ],
         ),
       ),
       drawer: StudentSidebar(
-        onLogout: () {
-          FirebaseAuth.instance.signOut();
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const SigninPage()),
-          );
-        },
+        onFeatureTap: (feature) => handleFeature(context, feature),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -70,7 +117,7 @@ class HomePage extends StatelessWidget {
               style: GoogleFonts.lato(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF242A42), // Solid text color
+                color: const Color(0xFF242A42),
               ),
             ),
             const SizedBox(height: 10),
@@ -80,10 +127,26 @@ class HomePage extends StatelessWidget {
                 crossAxisSpacing: 10,
                 mainAxisSpacing: 10,
                 children: [
-                  _buildFeatureCard(Icons.book, "Borrowed Books"),
-                  _buildFeatureCard(Icons.notifications, "Notifications"),
-                  _buildFeatureCard(Icons.person, "Profile"),
-                  _buildFeatureCard(Icons.help, "Help & Support"),
+                  _buildFeatureCard(
+                    Icons.book,
+                    "Borrowed Books",
+                    () => handleFeature(context, Feature.borrowedBooks),
+                  ),
+                  _buildFeatureCard(
+                    Icons.notifications,
+                    "Notifications",
+                    () => handleFeature(context, Feature.notifications),
+                  ),
+                  _buildFeatureCard(
+                    Icons.person,
+                    "Profile",
+                    () => handleFeature(context, Feature.profile),
+                  ),
+                  _buildFeatureCard(
+                    Icons.help,
+                    "Help & Support",
+                    () => handleFeature(context, Feature.helpSupport),
+                  ),
                 ],
               ),
             ),
@@ -94,31 +157,23 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  Widget _buildFeatureCard(
-    IconData icon,
-    String title, {
-    bool isLogout = false,
-  }) {
+  Widget _buildFeatureCard(IconData icon, String title, VoidCallback onTap) {
     return GestureDetector(
-      onTap: () {
-        if (isLogout) {
-          FirebaseAuth.instance.signOut();
-        }
-      },
+      onTap: onTap,
       child: Card(
         elevation: 4,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 50, color: Color(0xFF6F73D2)),
+            Icon(icon, size: 50, color: const Color(0xFF6F73D2)),
             const SizedBox(height: 10),
             Text(
               title,
               style: GoogleFonts.lato(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF242A42), // Solid text color
+                color: const Color(0xFF242A42),
               ),
             ),
           ],
@@ -128,11 +183,11 @@ class HomePage extends StatelessWidget {
   }
 }
 
-// Student Sidebar with Gradient Header
 class StudentSidebar extends StatelessWidget {
-  final VoidCallback onLogout;
+  final Function(Feature) onFeatureTap;
 
-  const StudentSidebar({Key? key, required this.onLogout}) : super(key: key);
+  const StudentSidebar({Key? key, required this.onFeatureTap})
+    : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -162,7 +217,7 @@ class StudentSidebar extends StatelessWidget {
                 const Text(
                   "Student Menu",
                   style: TextStyle(
-                    color: Colors.white, // Solid white text
+                    color: Colors.white,
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
                   ),
@@ -173,12 +228,36 @@ class StudentSidebar extends StatelessWidget {
           Expanded(
             child: ListView(
               children: [
-                _buildSidebarItem(Icons.home, "Home", () {}),
-                _buildSidebarItem(Icons.book, "My Borrowed Books", () {}),
-                _buildSidebarItem(Icons.notifications, "Notifications", () {}),
-                _buildSidebarItem(Icons.person, "Profile", () {}),
-                _buildSidebarItem(Icons.help, "Help & Support", () {}),
-                _buildSidebarItem(Icons.logout, "Logout", onLogout),
+                _buildSidebarItem(
+                  Icons.home,
+                  "Home",
+                  () => onFeatureTap(Feature.home),
+                ),
+                _buildSidebarItem(
+                  Icons.book,
+                  "My Borrowed Books",
+                  () => onFeatureTap(Feature.borrowedBooks),
+                ),
+                _buildSidebarItem(
+                  Icons.notifications,
+                  "Notifications",
+                  () => onFeatureTap(Feature.notifications),
+                ),
+                _buildSidebarItem(
+                  Icons.person,
+                  "Profile",
+                  () => onFeatureTap(Feature.profile),
+                ),
+                _buildSidebarItem(
+                  Icons.help,
+                  "Help & Support",
+                  () => onFeatureTap(Feature.helpSupport),
+                ),
+                _buildSidebarItem(
+                  Icons.logout,
+                  "Logout",
+                  () => onFeatureTap(Feature.logout),
+                ),
               ],
             ),
           ),
@@ -189,13 +268,10 @@ class StudentSidebar extends StatelessWidget {
 
   Widget _buildSidebarItem(IconData icon, String title, VoidCallback onTap) {
     return ListTile(
-      leading: Icon(icon, color: Color(0xFF242A42)),
+      leading: Icon(icon, color: const Color(0xFF242A42)),
       title: Text(
         title,
-        style: GoogleFonts.lato(
-          fontSize: 18,
-          color: Colors.black87, // Solid text color
-        ),
+        style: GoogleFonts.lato(fontSize: 18, color: Colors.black87),
       ),
       onTap: onTap,
     );

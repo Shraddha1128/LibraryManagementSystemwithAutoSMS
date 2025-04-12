@@ -4,7 +4,19 @@ cmake_minimum_required(VERSION 3.10)
 set(EPHEMERAL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/ephemeral")
 
 # Configuration provided via flutter tool.
-include(${EPHEMERAL_DIR}/generated_config.cmake)
+if(EXISTS "${EPHEMERAL_DIR}/generated_config.cmake")
+  include(${EPHEMERAL_DIR}/generated_config.cmake)
+else()
+  # Set default values that would normally be in generated_config.cmake
+  set(FLUTTER_TARGET_PLATFORM "linux-x64" CACHE STRING "")
+  set(FLUTTER_TARGET "lib/main.dart" CACHE STRING "")
+  set(FLUTTER_BUILD_DIR "build" CACHE STRING "")
+  set(FLUTTER_BUILD_MODE "debug" CACHE STRING "")
+  set(FLUTTER_ROOT "$ENV{FLUTTER_ROOT}" CACHE STRING "")
+  
+  # Create ephemeral directory if it doesn't exist
+  file(MAKE_DIRECTORY ${EPHEMERAL_DIR})
+endif()
 
 # TODO: Move the rest of this into files in ephemeral. See
 # https://github.com/flutter/flutter/issues/57146.

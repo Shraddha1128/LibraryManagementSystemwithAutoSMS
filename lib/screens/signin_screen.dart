@@ -17,54 +17,101 @@ class SigninState extends State<SigninPage> {
   final TextEditingController _passwordController = TextEditingController();
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
-  bool _isLoading = false; // To show loading indicator
+  bool _isLoading = false;
 
   void signInUser() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    setState(() => _isLoading = true); // Show loader
-
-    const String adminEmail = "shraddhavispute8@gmail.com";
-    const String adminPassword = "Admin@123";
-
     String email = _emailController.text.trim();
     String password = _passwordController.text.trim();
 
-    try {
-      if (email == adminEmail && password == adminPassword) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const AdminHomePage()),
-        );
-        return;
-      }
+    print("Trying login for: $email");
 
+    // Admin credentials check (before validation)
+    const String adminEmail = "shraddhavispute8@gmail.com";
+    const String adminPassword = "Admin@123";
+
+    if (email == adminEmail && password == adminPassword) {
+      print("Admin login success");
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const AdminHomePage()),
+      );
+      return;
+    }
+
+    // Validate form for regular users
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
+
+    try {
       UserCredential userCredential = await FirebaseAuth.instance
           .signInWithEmailAndPassword(email: email, password: password);
 
-      DocumentSnapshot userDoc =
-          await FirebaseFirestore.instance
-              .collection("users")
-              .doc(userCredential.user!.uid)
-              .get();
+      String uid = userCredential.user!.uid;
+      print("Firebase login success, UID: $uid");
 
-      if (userDoc.exists) {
-        String userName = userDoc["name"];
+      DocumentSnapshot userDoc =
+          await FirebaseFirestore.instance.collection("users").doc(uid).get();
+
+      if (userDoc.exists && userDoc.data() != null) {
+        String userName = userDoc["name"] ?? "User";
+        String userEmail = userDoc["email"] ?? "Email";
+        print("User data found: $userName");
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => HomePage(userName: userName)),
+          MaterialPageRoute(
+            builder:
+                (context) => HomePage(userName: userName, userEmail: userEmail),
+          ),
         );
       } else {
+        print("User document not found in Firestore.");
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder:
+                (context) => HomePage(userName: "User", userEmail: "Email"),
+          ),
+        );
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("User data not found in Firestore.")),
+          const SnackBar(
+            content: Text("User data not found. Logged in as Guest."),
+          ),
         );
       }
     } catch (error) {
+      print("Login error: $error");
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Login failed: ${error.toString()}")),
       );
     } finally {
-      setState(() => _isLoading = false); // Hide loader
+      setState(() => _isLoading = false);
+    }
+  }
+
+  void resetPassword() async {
+    String email = _emailController.text.trim();
+
+    if (email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Please enter your email to reset password."),
+        ),
+      );
+      return;
+    }
+
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Password reset email sent! Check your inbox."),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Error: ${e.toString()}")));
     }
   }
 
@@ -88,7 +135,6 @@ class SigninState extends State<SigninPage> {
         ),
         child: Center(
           child: SingleChildScrollView(
-            // Prevents overflow
             padding: const EdgeInsets.all(20.0),
             child: Card(
               shape: RoundedRectangleBorder(
@@ -138,7 +184,7 @@ class SigninState extends State<SigninPage> {
                       Align(
                         alignment: Alignment.centerRight,
                         child: TextButton(
-                          onPressed: () {},
+                          onPressed: resetPassword,
                           child: const Text(
                             'Forgot Password?',
                             style: TextStyle(color: Color(0xFF0D47A1)),
