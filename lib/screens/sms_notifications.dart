@@ -19,6 +19,9 @@ class SmsNotificationsPage extends StatefulWidget {
 
 class _SmsNotificationsPageState extends State<SmsNotificationsPage> {
   final _searchController = TextEditingController();
+  int _notificationsSent = 0;
+  DateTime? _lastSentTime;
+  bool _isAscending = true; // Track the sorting order
 
   int _calculatePenalty(DateTime returnDate) {
     final currentDate = DateTime.now();
@@ -26,6 +29,13 @@ class _SmsNotificationsPageState extends State<SmsNotificationsPage> {
       return currentDate.difference(returnDate).inDays;
     }
     return 0;
+  }
+
+  // Toggle the sorting order
+  void _toggleSortOrder() {
+    setState(() {
+      _isAscending = !_isAscending;
+    });
   }
 
   Future<void> _sendSmsNotification(String phoneNumber, String message) async {
@@ -60,16 +70,11 @@ class _SmsNotificationsPageState extends State<SmsNotificationsPage> {
         },
       );
 
-      print('Response status: ${response.statusCode}');
-      print('Response body: ${response.body}');
-
       if (response.statusCode == 200 || response.statusCode == 201) {
         print('SMS sent successfully');
       } else {
         final errorData = json.decode(response.body);
         print('Failed to send SMS: ${errorData['message']}');
-        // Log more details about the error
-        print('Error details: $errorData');
       }
     } catch (e) {
       print('Error sending SMS: $e');
@@ -88,11 +93,47 @@ class _SmsNotificationsPageState extends State<SmsNotificationsPage> {
           "Hello $studentName, you have a penalty of ₹$penalty for returning the book late. Please return it as soon as possible.";
 
       await _sendSmsNotification(phoneNumber, message);
+      await _recordNotification(
+        name: studentName,
+        phone: phoneNumber,
+        message: message,
+      ); // <-- Log it
+
+      setState(() {
+        _notificationsSent++;
+        _lastSentTime = DateTime.now();
+      });
 
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('SMS sent to $studentName')));
     }
+  }
+
+  Future<void> _sendAllNotifications(List<DocumentSnapshot> records) async {
+    for (var record in records) {
+      try {
+        DateTime returnDate = DateTime.parse(record['returnDate']);
+        String name = record['name'] ?? 'Unknown';
+        String phone = record['phno'] ?? '';
+        await _sendNotificationForUser(name, phone, returnDate);
+      } catch (e) {
+        print('Error processing record: $e');
+      }
+    }
+  }
+
+  Future<void> _recordNotification({
+    required String name,
+    required String phone,
+    required String message,
+  }) async {
+    await FirebaseFirestore.instance.collection('notifications_sent').add({
+      'name': name,
+      'phone': phone,
+      'message': message,
+      'timestamp': FieldValue.serverTimestamp(),
+    });
   }
 
   @override
@@ -102,7 +143,7 @@ class _SmsNotificationsPageState extends State<SmsNotificationsPage> {
         onFeatureTap: (feature) => _handleFeatureTap(context, feature),
       ),
       appBar: AppBar(
-        title: Text(
+        title: const Text(
           "SMS Notifications",
           style: TextStyle(
             fontSize: 22,
@@ -126,26 +167,82 @@ class _SmsNotificationsPageState extends State<SmsNotificationsPage> {
         ),
       ),
       body: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16),
         child: Column(
           children: [
+            Card(
+              elevation: 4,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Notifications Sent: $_notificationsSent',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          _lastSentTime != null
+                              ? 'Last Sent: ${DateFormat('MMM d, yyyy – h:mm a').format(_lastSentTime!)}'
+                              : 'Last Sent: Never',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ],
+                    ),
+                    ElevatedButton.icon(
+                      onPressed: () async {
+                        final snapshot =
+                            await FirebaseFirestore.instance
+                                .collection('due_date_fine')
+                                .get();
+                        await _sendAllNotifications(snapshot.docs);
+                      },
+                      icon: const Icon(Icons.send),
+                      label: const Text("Send All"),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: "Search by name, email, class, or book",
+                prefixIcon: const Icon(Icons.search),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              onChanged: (value) => setState(() {}),
+            ),
+            const SizedBox(height: 10),
             Row(
               children: [
-                Expanded(
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: "Search by name, email, class, or book",
-                      prefixIcon: Icon(Icons.search),
-                    ),
-                    onChanged: (value) => setState(() {}),
+                Text('Sort by penalty:'),
+                IconButton(
+                  icon: Icon(
+                    _isAscending ? Icons.arrow_upward : Icons.arrow_downward,
                   ),
+                  onPressed: _toggleSortOrder,
                 ),
               ],
             ),
             const SizedBox(height: 10),
             Expanded(
-              child: StreamBuilder(
+              child: StreamBuilder<QuerySnapshot>(
                 stream:
                     FirebaseFirestore.instance
                         .collection('due_date_fine')
@@ -156,19 +253,45 @@ class _SmsNotificationsPageState extends State<SmsNotificationsPage> {
                   }
 
                   var records = snapshot.data!.docs;
-
+                  var query = _searchController.text.toLowerCase();
                   var filteredRecords =
-                      records.where((record) {
-                        String query = _searchController.text.toLowerCase();
-                        return record['name'].toLowerCase().contains(query) ||
-                            record['email'].toLowerCase().contains(query) ||
-                            record['class'].toLowerCase().contains(query) ||
-                            record['issueDate'].toLowerCase().contains(query) ||
-                            record['returnDate'].toLowerCase().contains(
+                      records.where((r) {
+                        final data = r.data() as Map<String, dynamic>;
+                        return (data['name'] ?? '').toLowerCase().contains(
                               query,
                             ) ||
-                            record['penalty'].toString().contains(query);
+                            (data['email'] ?? '').toLowerCase().contains(
+                              query,
+                            ) ||
+                            (data['className'] ?? '').toLowerCase().contains(
+                              query,
+                            ) ||
+                            (data['issueDate'] ?? '').toLowerCase().contains(
+                              query,
+                            ) ||
+                            (data['returnDate'] ?? '').toLowerCase().contains(
+                              query,
+                            ) ||
+                            data['penalty'].toString().contains(query);
                       }).toList();
+
+                  // Sort records based on penalty
+                  filteredRecords.sort((a, b) {
+                    final penaltyA = _calculatePenalty(
+                      DateTime.parse(
+                        (a.data() as Map<String, dynamic>)['returnDate'],
+                      ),
+                    );
+                    final penaltyB = _calculatePenalty(
+                      DateTime.parse(
+                        (b.data() as Map<String, dynamic>)['returnDate'],
+                      ),
+                    );
+
+                    return _isAscending
+                        ? penaltyA.compareTo(penaltyB)
+                        : penaltyB.compareTo(penaltyA);
+                  });
 
                   return SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
@@ -185,22 +308,23 @@ class _SmsNotificationsPageState extends State<SmsNotificationsPage> {
                       ],
                       rows:
                           filteredRecords.map((record) {
+                            final data = record.data() as Map<String, dynamic>;
                             DateTime returnDate = DateTime.parse(
-                              record['returnDate'],
+                              data['returnDate'],
                             );
                             DateTime issueDate = DateTime.parse(
-                              record['issueDate'],
+                              data['issueDate'],
                             );
-                            String studentName = record['name'];
-                            String phoneNumber = record['phno'] ?? '';
+                            String name = data['name'] ?? '';
+                            String phone = data['phno'] ?? '';
                             int penalty = _calculatePenalty(returnDate);
 
                             return DataRow(
                               cells: [
-                                DataCell(Text(studentName)),
-                                DataCell(Text(record['email'])),
-                                DataCell(Text(phoneNumber)),
-                                DataCell(Text(record['class'])),
+                                DataCell(Text(name)),
+                                DataCell(Text(data['email'] ?? '')),
+                                DataCell(Text(phone)),
+                                DataCell(Text(data['class'] ?? '')),
                                 DataCell(
                                   Text(DateFormat.yMMMd().format(issueDate)),
                                 ),
@@ -212,12 +336,12 @@ class _SmsNotificationsPageState extends State<SmsNotificationsPage> {
                                   ElevatedButton(
                                     onPressed: () async {
                                       await _sendNotificationForUser(
-                                        studentName,
-                                        phoneNumber,
+                                        name,
+                                        phone,
                                         returnDate,
                                       );
                                     },
-                                    child: const Text("Send Notification"),
+                                    child: const Text("Send"),
                                   ),
                                 ),
                               ],

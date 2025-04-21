@@ -39,6 +39,43 @@ class _MemberManagementPageState extends State<MemberManagementPage> {
         return;
       }
 
+      // Determine if this is a new record or an update
+      bool isUpdate = _editingId != null;
+
+      if (isUpdate) {
+        // Show confirmation dialog for update
+        bool confirmUpdate =
+            await showDialog(
+              context: context,
+              builder: (BuildContext context) {
+                return AlertDialog(
+                  title: Text("Confirm Update"),
+                  content: Text(
+                    "Are you sure you want to update ${_nameController.text}'s record?",
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(false),
+                      child: Text("Cancel"),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(true),
+                      child: Text(
+                        "Update",
+                        style: TextStyle(color: Colors.blue),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ) ??
+            false;
+
+        if (!confirmUpdate) {
+          return; // Exit if user cancelled
+        }
+      }
+
       await FirebaseFirestore.instance
           .collection('students')
           .doc(_editingId ?? _idController.text)
@@ -52,7 +89,68 @@ class _MemberManagementPageState extends State<MemberManagementPage> {
             'issueDate': _issueDate!.toIso8601String(),
           });
 
+      // Show appropriate success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isUpdate
+                ? "Record updated Successfully"
+                : "Record saved Successfully",
+          ),
+          backgroundColor: Colors.green,
+        ),
+      );
+
       _clearForm();
+    }
+  }
+
+  // Function to delete student record
+  Future<void> _deleteStudent(String documentId, String studentName) async {
+    // Show confirmation dialog
+    bool confirmDelete =
+        await showDialog(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              title: Text("Confirm Delete"),
+              content: Text(
+                "Are you sure you want to delete $studentName's record?",
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: Text("Cancel"),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: Text("Delete", style: TextStyle(color: Colors.red)),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
+
+    if (confirmDelete) {
+      // Proceed with deletion
+      await FirebaseFirestore.instance
+          .collection('students')
+          .doc(documentId)
+          .delete();
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Record deleted Successfully"),
+          backgroundColor: Colors.red,
+        ),
+      );
+
+      // Clear form if the deleted record was being edited
+      if (_editingId == documentId) {
+        _clearForm();
+      }
     }
   }
 
@@ -327,22 +425,35 @@ class _MemberManagementPageState extends State<MemberManagementPage> {
                           subtitle: Text(
                             "Email: ${student['email']} | Book: ${student['book']} | Issue Date: ${DateFormat.yMMMd().format(DateTime.parse(student['issueDate']))}",
                           ),
-                          trailing: IconButton(
-                            icon: Icon(Icons.edit, color: Colors.blue),
-                            onPressed: () {
-                              setState(() {
-                                _editingId = student.id;
-                                _nameController.text = student['name'];
-                                _emailController.text = student['email'];
-                                _classController.text = student['class'];
-                                _idController.text = student['id'];
-                                _bookController.text = student['book'];
-                                _phnoController.text = student['phno'];
-                                _issueDate = DateTime.parse(
-                                  student['issueDate'],
-                                );
-                              });
-                            },
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: Icon(Icons.edit, color: Colors.blue),
+                                onPressed: () {
+                                  setState(() {
+                                    _editingId = student.id;
+                                    _nameController.text = student['name'];
+                                    _emailController.text = student['email'];
+                                    _classController.text = student['class'];
+                                    _idController.text = student['id'];
+                                    _bookController.text = student['book'];
+                                    _phnoController.text = student['phno'];
+                                    _issueDate = DateTime.parse(
+                                      student['issueDate'],
+                                    );
+                                  });
+                                },
+                              ),
+                              IconButton(
+                                icon: Icon(Icons.delete, color: Colors.red),
+                                onPressed:
+                                    () => _deleteStudent(
+                                      student.id,
+                                      student['name'],
+                                    ),
+                              ),
+                            ],
                           ),
                         ),
                       );

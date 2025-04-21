@@ -201,13 +201,19 @@ class _IssueReturnBooksPageState extends State<IssueReturnBooksPage> {
 
   // 🔁 Import student data into issue_return collection
   Future<void> _importFromStudents() async {
-    var studentsSnapshot =
+    final studentsSnapshot =
         await FirebaseFirestore.instance.collection('students').get();
+    final issueReturnRef = FirebaseFirestore.instance.collection(
+      'issue_return',
+    );
 
+    // Step 1: Get all student IDs
+    final studentIds = studentsSnapshot.docs.map((doc) => doc.id).toSet();
+
+    // Step 2: Sync existing students to issue_return
     for (var student in studentsSnapshot.docs) {
-      var data = student.data();
+      final data = student.data();
 
-      // Safely parse issueDate
       DateTime issueDate;
       try {
         issueDate = DateTime.parse(data['issueDate']);
@@ -216,41 +222,38 @@ class _IssueReturnBooksPageState extends State<IssueReturnBooksPage> {
         continue;
       }
 
-      var returnDate = issueDate.add(Duration(days: 30));
+      final returnDate = issueDate.add(Duration(days: 30));
 
-      // Always sync student record into issue_return
-      await FirebaseFirestore.instance
-          .collection('issue_return')
-          .doc(student.id)
-          .set({
-            'name': data['name'],
-            'email': data['email'],
-            'class': data['class'],
-            'book': data['book'] ?? 'N/A',
-            'phno': data['phno'],
-            'issueDate': issueDate.toIso8601String(),
-            'returnDate': returnDate.toIso8601String(),
-            // Don't override "submitted" unless it's a new record
-          }, SetOptions(merge: true));
+      await issueReturnRef.doc(student.id).set({
+        'name': data['name'],
+        'email': data['email'],
+        'class': data['class'],
+        'book': data['book'] ?? 'N/A',
+        'phno': data['phno'],
+        'issueDate': issueDate.toIso8601String(),
+        'returnDate': returnDate.toIso8601String(),
+      }, SetOptions(merge: true));
 
-      // Ensure 'submitted' field exists if it's a new doc
-      var issueReturnDoc =
-          await FirebaseFirestore.instance
-              .collection('issue_return')
-              .doc(student.id)
-              .get();
+      final issueReturnDoc = await issueReturnRef.doc(student.id).get();
 
       if (!issueReturnDoc.data()!.containsKey('submitted')) {
-        await FirebaseFirestore.instance
-            .collection('issue_return')
-            .doc(student.id)
-            .update({'submitted': false});
+        await issueReturnRef.doc(student.id).update({'submitted': false});
       }
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Student records synced with Issue/Return')),
-    );
+    // Step 3: Remove issue_return docs with no matching student
+    final issueReturnSnapshot = await issueReturnRef.get();
+    for (var doc in issueReturnSnapshot.docs) {
+      if (!studentIds.contains(doc.id)) {
+        await issueReturnRef.doc(doc.id).delete();
+        print('Deleted issue_return record: ${doc.id}');
+      }
+    }
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Synced successfully.')));
   }
 
   void _handleFeatureTap(BuildContext context, String feature) {

@@ -68,7 +68,9 @@ class BorrowedBooksScreen extends StatelessWidget {
             case Feature.notifications:
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+                MaterialPageRoute(
+                  builder: (_) => NotificationsScreen(userEmail: userEmail),
+                ),
               );
               break;
 

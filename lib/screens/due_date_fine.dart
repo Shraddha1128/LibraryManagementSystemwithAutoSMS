@@ -20,6 +20,71 @@ class _DueDateFinePageState extends State<DueDateFinePage> {
   String _penaltyFilter = "None"; // Changed to a single filter
   final TextEditingController _searchController = TextEditingController();
 
+  void initState() {
+    super.initState();
+    _syncData(); // Call cleanup on load
+  }
+
+  Future<void> _syncData() async {
+    try {
+      // Fetch valid students
+      final studentDocs =
+          await FirebaseFirestore.instance.collection('students').get();
+      final validStudentEmails =
+          studentDocs.docs.map((doc) => doc['email']).toSet();
+
+      // Fetch all issue_return records
+      final issueReturnSnapshot =
+          await FirebaseFirestore.instance.collection('issue_return').get();
+      final issueReturnDocs = issueReturnSnapshot.docs;
+      final issueReturnIds = issueReturnDocs.map((doc) => doc.id).toSet();
+
+      // Clean invalid issue_return and corresponding due_date_fine
+      for (var record in issueReturnDocs) {
+        final data = record.data();
+        final email = data['email'];
+        final docId = record.id;
+
+        if (!validStudentEmails.contains(email)) {
+          await FirebaseFirestore.instance
+              .collection('issue_return')
+              .doc(docId)
+              .delete();
+
+          await FirebaseFirestore.instance
+              .collection('due_date_fine')
+              .doc(docId)
+              .delete();
+        }
+      }
+
+      // Delete orphan entries from due_date_fine that don't exist in issue_return
+      final dueDateFineDocs =
+          await FirebaseFirestore.instance.collection('due_date_fine').get();
+      for (var doc in dueDateFineDocs.docs) {
+        if (!issueReturnIds.contains(doc.id)) {
+          await FirebaseFirestore.instance
+              .collection('due_date_fine')
+              .doc(doc.id)
+              .delete();
+        }
+      }
+    } catch (e) {
+      print('Error syncing data: $e');
+    }
+  }
+
+  Future<void> _removeFromDueDateFine(String docId) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('due_date_fine')
+          .doc(docId)
+          .delete();
+    } catch (e) {
+      print('Error deleting due date fine: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -108,10 +173,9 @@ class _DueDateFinePageState extends State<DueDateFinePage> {
 
                     // If the book is already submitted, remove any entry in due_date_fine
                     if (record['submitted']) {
-                      FirebaseFirestore.instance
-                          .collection('due_date_fine')
-                          .doc(record.id)
-                          .delete();
+                      _removeFromDueDateFine(
+                        record.id,
+                      ); // Delete from due_date_fine
                       continue; // Skip to the next record
                     }
 
@@ -192,7 +256,13 @@ class _DueDateFinePageState extends State<DueDateFinePage> {
                                 DataCell(Text(student['email'])),
                                 DataCell(Text(student['phno'])),
                                 DataCell(Text(student['class'])),
-                                DataCell(Text(student['issueDate'])),
+                                DataCell(
+                                  Text(
+                                    DateFormat.yMMMd().format(
+                                      DateTime.parse(student['issueDate']),
+                                    ),
+                                  ),
+                                ),
                                 DataCell(
                                   Text(
                                     DateFormat.yMMMd().format(
